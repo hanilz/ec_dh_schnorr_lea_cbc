@@ -1,4 +1,3 @@
-#-*- coding: utf-8 -*-
 
 class CipherMode(object):
     lea = None
@@ -19,6 +18,7 @@ class CipherMode(object):
     def final(self, *args, **kwargs):
         self.no_more = True
         return b''
+
 
 class TagError(Exception):
     def __init__(self, message):
