@@ -1,22 +1,23 @@
 #-*- coding: utf-8 -*-
-from LEA import LEA
-from CipherMode import CipherMode
+from references.lea.LEA import LEA
+from references.lea.CipherMode import CipherMode
+
 
 class CBC(CipherMode):
-    def __init__(self, do_enc, key, iv, PKCS5Padding=False):
+    def __init__(self, is_enc, key, iv, PKCS5Padding=False):
         self.buffer = bytearray()
         self.lea = LEA(key)
         self.PKCS5Padding = PKCS5Padding
         self.chain_vec = LEA.to_bytearray(iv, 'IV', forcecopy=True)
 
-        if do_enc:
+        if is_enc:
             self.update = self.encrypt
         else:
             self.update = self.decrypt
 
     def encrypt(self, pt):
         if pt is None:
-            raise AttributeError('Improper pt')
+            raise AttributeError('Improper plaintext')
         if self.no_more:
             raise RuntimeError('Already finished')
 
