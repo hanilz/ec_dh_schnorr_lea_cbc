@@ -2,7 +2,6 @@ import random
 import math
 import sys
 
-
 def gen_key(bits, zekerheid):
     p = zoek_wortel(bits, zekerheid)
     g = zoek_primitive_wortel(p)
@@ -28,7 +27,6 @@ def SS(num, zekerheid):
             return False
     # if there have been t iterations without failure, num is believed to be prime
     return True
-
 
 #computes the jacobi symbol of a, n
 def jacobi( a, n ):
