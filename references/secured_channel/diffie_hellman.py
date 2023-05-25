@@ -1,5 +1,5 @@
-from elliptic import *
-from finitefield.finitefield import FiniteField
+from references.secured_channel.elliptic import *
+from references.secured_channel.finitefield.finitefield import FiniteField
 
 import os
 
