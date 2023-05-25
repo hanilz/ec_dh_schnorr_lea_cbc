@@ -4,36 +4,60 @@ import elgamal
 import rabin
 import random
 import base64
+from references.secured_channel.elliptic import *
+from references.secured_channel.finitefield.finitefield import FiniteField
+from references.secured_channel.diffie_hellman import *
+import os
 def main():
-    
+    F = FiniteField(3851, 1)
+    curve = EllipticCurve(a=F(324), b=F(1287))
+    basePoint = Point(curve, F(920), F(303))
+
     print("Bob chooses (p,g,a) and publishes it for ALice to use in the El-Gamal EC to encrypt the LEA key")
     print("Alice uses (p,g,a) to encrypt the LEA key \n")
-    keys = elgamal.gen_key(256, 32)
-    priv = keys['privateKey']
-    pub = keys['publicKey']
-    bericht = "blacksnakeblacksnake1234"
-    versleuteld = elgamal.encrypt(pub, bericht)
+    #keys = elgamal.gen_key(256, 32)
+    #generateSecretKey(256) 256 bits
+    #read vals
+    #priv = keys['privateKey']#!!!!!!!!!!!!!!!!!!!!!!!!!
+    #pub = keys['publicKey']#!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    #private
+    aliceSecretKey=generateSecretKey(256)##might be less
+    bobSecretKey=generateSecretKey(256)
+
+    #public
+    alicePublicKey = sendDH(aliceSecretKey, basePoint, lambda x: x)
+    bobPublicKey = sendDH(bobSecretKey, basePoint, lambda x: x)
+
+    #bericht = "blacksnakeblacksnake1234"
+    #versleuteld = elgamal.encrypt(bobSecretKey, bericht)#SC !!!!!!!!!!!!!!!!!!!!!
+
+    #shared keys
+    sharedSecret1 = receiveDH(bobSecretKey, lambda: alicePublicKey)
+    sharedSecret2 = receiveDH(aliceSecretKey, lambda: bobPublicKey)
+
     print("Alice encrypted the key successfully using El-Gamal cipher \n")
     print("Alice choses p and q to sign the key using Rabin signature \n")
     p = 37
     q = 7
     print("Alice choses p = \n" ,p)
     print("Alice choses q = \n", q)
-    if (not rabin.checkPrime(p,q)):
-      p = 31
-      q = 23
-    
-    nRabin = p*q
-    resSig, resU = rabin.root(bytes(versleuteld,'utf-8'),p,q)
+    #if (not rabin.checkPrime(p,q)):#prime for sig
+      #p = 31
+      #q = 23
+    p=sharedSecret1
+    q=sharedSecret2
+    nRabin = p*q#sig
+    resSig, resU = rabin.root(bytes(versleuteld,'utf-8'),p,q)#sig
     encryp = int.from_bytes(bytes(versleuteld,'utf-8'),'big')
-    sig2 = resSig**2
+    sig2 = resSig**2#sig
     print("Alice signed the key successfully using Rabin signature \n")
     print("Alice send bob the encrypted key\n")
-    condVerified = (rabin.h(encryp,resU)) % nRabin == ((sig2)% nRabin)
+    condVerified = (rabin.h(encryp,resU)) % nRabin == ((sig2)% nRabin)#sig ver
     print("Bob Verifies that the message was received from Alice-->", condVerified)
     if condVerified:
       print("Bob received the encrypted key\n")
-      dec = elgamal.decrypt(priv, versleuteld)
+      dec = elgamal.decrypt(aliceSecretKey, versleuteld)#shared key !!!!!!!!!!!!!!!!!
       print("Bob decrypted key using El-GAMAL cipher -->", dec)
     else: 
       print("None verified message")
