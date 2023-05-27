@@ -1,156 +1,87 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import base64
-import hashlib
-
 import LEA
 import random
-
-from references.schnorr_sig.schnorr_lib import sha256
-from references.secured_channel.diffie_hellman import *
-from references.schnorr_sig import schnorr_lib as sl, schnorr_lib
-
-import json
-import binascii
-import references.schnorr_sig.create_keypair as ckp
-import references.schnorr_sig.schnorr_lib as sl
-
-def point_to_bytes(point: Point):
-    x_bytes = point.x.n.to_bytes(16, 'big')
-    y_bytes = point.y.n.to_bytes(16, 'big')
-    return x_bytes + y_bytes
+import references.secured_channel.ECDH as ec
+import schnorr
+from binascii import hexlify
 
 
-# def main():
-#     F = FiniteField(3851, 1)
-#     curve = EllipticCurve(a=F(324), b=F(1287))
-#     basePoint = Point(curve, F(920), F(303))
-#
-#     #private
-#     aliceSecretKey=generateSecretKey(256)##might be less
-#     bobSecretKey=generateSecretKey(256)
-#
-#     #public
-#     alicePublicKey = sendDH(aliceSecretKey, basePoint, lambda x: x)
-#     bobPublicKey = sendDH(bobSecretKey, basePoint, lambda x: x)
-#
-#     message = "chachachaunicorn"
-#
-#     #shared keys
-#     sharedSecret1 = receiveDH(bobSecretKey, lambda: alicePublicKey)
-#     sharedSecret2 = receiveDH(aliceSecretKey, lambda: bobPublicKey)
-#
-#     M = sl.sha256(message.encode())
-#
-#     sig = sl.schnorr_sign(M, aliceSecretKey)
-#     pubkey_bytes = point_to_bytes(alicePublicKey)
-#
-#     print("PublicKey =", alicePublicKey)
-#     print("Signature =", sig.hex())
-#
-#     result = sl.schnorr_verify(M, pubkey_bytes, sig)
-#
-#     if result:
-#         print("The signature is VALID for this message and this public key")
-#     else:
-#         print("The signature is NOT VALID for this message and this public key")
-#
-#     mp3_filename = r"cha_cha_cha.mp3"
-#
-#     with open(mp3_filename, 'rb') as f_mp3:
-#         pt = f_mp3.read()
-#
-#     #a random 128 bit initial vector
-#     iv = base64.b16encode(random.getrandbits(128).to_bytes(16, byteorder='little'))
-#
-#     #encryption
-#     leaCBC = LEA.CBC(True, sharedSecret1,iv,True)
-#     ct = leaCBC.update(pt)
-#     ct += leaCBC.final()
-#
-#     print("\n\nBob encrypted the email successfully using LEA with CBC mode\n")
-#     print("Bob send Alice the encrypted email\n")
-#
-#     #decryption
-#     print("Alice received the encrypted email and she starts decrypting it\n")
-#     leaCBC = LEA.CBC(False, dec,iv, True)
-#     pt = leaCBC.update(ct)
-#     pt += leaCBC.final()
-#
-#     # Save the encrypted MP3 file to disk
-#     with open('cha_cha_cha_decrypted.mp3', 'wb') as f:
-#         f.write(pt)
-#
-#
-#    # decrypt_output = pt.decode()
-#     print("Alice decrypted the email successfully\n")
-#    # print("The decrypted message is- " + decrypt_output)
-#
-#     print("Decrypt End")
+def create_verifier(public_key, p, g):
+    verifier = schnorr.SchnorrVerifier(keys=public_key, p=p, g=g, hash_func=schnorr.sha256_hash)
+    return verifier
+
 
 def main():
     print("Alice want to send encrypt message to Bob using LEA in CBC mode with Elliptic Curve Diffie-Hellman key")
     print("Alice generating a private and public Elliptic Curve Diffie-Hellman key")
 
-    #base_point = Point(curve, F(920), F(303))
-    # [0] - Alice's public key, [1] Bob's public key
-    public_keys_list = ckp.create_keypair()
+    # Create private and public key for Alic and Bob
+    aliceSecretKey, alicePublicKey = ec.make_keypair()
+    bobSecretKey, bobPublicKey = ec.make_keypair()
 
-    filename = "users.json"
-    with open(filename, "r") as file:
-        data = json.load(file)
-    alice_secret_key = data['users'][0]['privateKey']
-    alice_public_key = data['users'][0]['publicKey']
+    g = 2
+    p = 2695139  # prime number
+    public_key = pow(g, aliceSecretKey, p)
+    signer = schnorr.SchnorrSigner(key=aliceSecretKey, p=p, g=g, hash_func=schnorr.sha256_hash)
+    print("Alice signs the public key")
+    signature_alice_public_key = signer.sign(str(alicePublicKey))
 
-    bob_secret_key = data['users'][1]['privateKey']
-    bob_public_key = data['users'][1]['publicKey']
+    print("Bob verifies that he talk with Alice")
+    Bob_verifier = create_verifier(public_key, p, g)
+    verified = Bob_verifier.verify(str(alicePublicKey), signature_alice_public_key)
+    if verified:
+        print("Bob verified alice's public key")
+    else:
+        print("Abort. The signature of the public key is NOT VALID.")
+        raise Exception("Imposter captured")
 
-    # Shared keys
-    shared_secret_key_bob = receiveDH(bob_secret_key, lambda: public_keys_list[0]) # 0 - Alice, 1 - Bob
-    shared_secret_key_alice = receiveDH(alice_secret_key, lambda: public_keys_list[1])
+    print("Alice generating shared keys from the Elliptic Curve Diffie-Hellman key")
+    # Calculate shared key - DH
+    shared_secret1 = ec.scalar_mult(bobSecretKey, alicePublicKey)
+    shared_secret2 = ec.scalar_mult(aliceSecretKey, bobPublicKey) # No need, it's suppose to be the same like sharedSecert1
+    if shared_secret1 == shared_secret2:
+        print("The shared keys are the same. Continue to encrypt.")
 
     print("Alice encrypts the message with LEA in CBC mode symmetric encryption")
     mp3_filename = r"cha_cha_cha.mp3"
 
-    # with open(mp3_filename, 'rb') as f_mp3:
-    #    pt = f_mp3.read()
-    pt = mp3_filename
-    #a random 128 bit initial vector
+    with open(mp3_filename, 'rb') as f_mp3:
+       pt = f_mp3.read()
+    # a random 128 bit initial vector
     iv = base64.b16encode(random.getrandbits(128).to_bytes(16, byteorder='little'))
 
-    #encryption
-    string_value = str(shared_secret_key_alice.x.n)
-    bytes_value = string_value.encode('utf-8')
+    # encryption
+    shared_key_str = str(shared_secret1[0])
+    shared_key_bytes = bytes(shared_key_str, 'ascii')
+    shared_lea_key = hexlify(shared_key_bytes)
+    shared_lea_key = shared_lea_key[0:24]
 
-    leaCBC = LEA.CBC(True, point_to_bytes(shared_secret_key_alice),iv,True)
+    leaCBC = LEA.CBC(True, shared_lea_key, iv, True)
     ct = leaCBC.update(pt)
     ct += leaCBC.final()
 
-    print("Alice signs with her secret key using schnorr signature")
-    ct_bytes = sha256(ct)
-    #changed int.to_bytes(alice_secret_key)
-    hex_privkey = hex(alice_secret_key).replace('0x', '').rjust(64, '0')
-    sig = sl.schnorr_sign(ct_bytes, hex_privkey)
+    print("Alice signs with her secret key using schnorr signature of the cipher text")
+    signer = schnorr.SchnorrSigner(key=aliceSecretKey, p=p, g=g, hash_func=schnorr.sha256_hash)
+    signature = signer.sign(str(ct))
 
-    print("Alice sends sig and ct to Bob")
+    print("Alice sends signature of the ct to Bob")
     print("Bob verifies the signature")
-    #3s = str(alice_public_key.x.n)
-
-    pubkey_bytes = bytes.fromhex(alice_public_key)
-    verify = sl.schnorr_verify(ct_bytes, pubkey_bytes, sig)
-    if verify:
+    verified = Bob_verifier.verify(str(ct), signature)
+    if verified:
         print("The signature is VALID for this message and this public key")
         print("Bob decrypts the message that Alice sent")
-        leaCBC = LEA.CBC(False, point_to_bytes(shared_secret_key_bob), iv, True)
+        leaCBC = LEA.CBC(False, shared_lea_key, iv, True)
         pt = leaCBC.update(ct)
         pt += leaCBC.final()
 
         # Save the encrypted MP3 file to disk
         with open('cha_cha_cha_decrypted.mp3', 'wb') as f:
             f.write(pt)
-
     else:
         print("The signature is NOT VALID for this message and this public key")
 
+
+
 if __name__ == "__main__":
     main()
-   
