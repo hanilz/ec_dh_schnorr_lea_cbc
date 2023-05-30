@@ -1,78 +1,87 @@
-#-*- coding: utf-8 -*-
-import LEA
-import elgamal
-import rabin
-import random
+# -*- coding: utf-8 -*-
 import base64
-def main():
-    
-    print("Bob chooses (p,g,a) and publishes it for ALice to use in the El-Gamal EC to encrypt the LEA key")
-    print("Alice uses (p,g,a) to encrypt the LEA key \n")
-    keys = elgamal.gen_key(256, 32)
-    priv = keys['privateKey']
-    pub = keys['publicKey']
-    bericht = "blacksnakeblacksnake1234"
-    versleuteld = elgamal.encrypt(pub, bericht)
-    print("Alice encrypted the key successfully using El-Gamal cipher \n")
-    print("Alice choses p and q to sign the key using Rabin signature \n")
-    p = 37
-    q = 7
-    print("Alice choses p = \n" ,p)
-    print("Alice choses q = \n", q)
-    if (not rabin.checkPrime(p,q)):
-      p = 31
-      q = 23
-    
-    nRabin = p*q
-    resSig, resU = rabin.root(bytes(versleuteld,'utf-8'),p,q)
-    encryp = int.from_bytes(bytes(versleuteld,'utf-8'),'big')
-    sig2 = resSig**2
-    print("Alice signed the key successfully using Rabin signature \n")
-    print("Alice send bob the encrypted key\n")
-    condVerified = (rabin.h(encryp,resU)) % nRabin == ((sig2)% nRabin)
-    print("Bob Verifies that the message was received from Alice-->", condVerified)
-    if condVerified:
-      print("Bob received the encrypted key\n")
-      dec = elgamal.decrypt(priv, versleuteld)
-      print("Bob decrypted key using El-GAMAL cipher -->", dec)
-    else: 
-      print("None verified message")
-    print("and he start to encrypt the email message with this key\n")
+import LEA
+import random
+import references.secured_channel.ECDH as ec
+import schnorr
+from binascii import hexlify
 
+
+def create_verifier(public_key, p, g):
+    verifier = schnorr.SchnorrVerifier(keys=public_key, p=p, g=g, hash_func=schnorr.sha256_hash)
+    return verifier
+
+
+def main():
+    print("Alice want to send encrypt message to Bob using LEA in CBC mode with Elliptic Curve Diffie-Hellman key")
+    print("Alice generating a private and public Elliptic Curve Diffie-Hellman key")
+
+    # Create private and public key for Alic and Bob
+    aliceSecretKey, alicePublicKey = ec.make_keypair()
+    bobSecretKey, bobPublicKey = ec.make_keypair()
+
+    g = 2
+    p = 2695139  # prime number
+    public_key = pow(g, aliceSecretKey, p)
+    signer = schnorr.SchnorrSigner(key=aliceSecretKey, p=p, g=g, hash_func=schnorr.sha256_hash)
+    print("Alice signs the public key")
+    signature_alice_public_key = signer.sign(str(alicePublicKey))
+
+    print("Bob verifies that he talk with Alice")
+    Bob_verifier = create_verifier(public_key, p, g)
+    verified = Bob_verifier.verify(str(alicePublicKey), signature_alice_public_key)
+    if verified:
+        print("Bob verified alice's public key")
+    else:
+        print("Abort. The signature of the public key is NOT VALID.")
+        raise Exception("Imposter captured")
+
+    print("Alice generating shared keys from the Elliptic Curve Diffie-Hellman key")
+    # Calculate shared key - DH
+    shared_secret1 = ec.scalar_mult(bobSecretKey, alicePublicKey)
+    shared_secret2 = ec.scalar_mult(aliceSecretKey, bobPublicKey) # No need, it's suppose to be the same like sharedSecert1
+    if shared_secret1 == shared_secret2:
+        print("The shared keys are the same. Continue to encrypt.")
+
+    print("Alice encrypts the message with LEA in CBC mode symmetric encryption")
     mp3_filename = r"cha_cha_cha.mp3"
 
     with open(mp3_filename, 'rb') as f_mp3:
-        pt = f_mp3.read()
-    
-    #a random 128 bit initial vector
+       pt = f_mp3.read()
+    # a random 128 bit initial vector
     iv = base64.b16encode(random.getrandbits(128).to_bytes(16, byteorder='little'))
-    
-    #encryption
-    leaCBC = LEA.CBC(True, dec,iv,True)
+
+    # encryption
+    shared_key_str = str(shared_secret1[0])
+    shared_key_bytes = bytes(shared_key_str, 'ascii')
+    shared_lea_key = hexlify(shared_key_bytes)
+    shared_lea_key = shared_lea_key[0:24]
+
+    leaCBC = LEA.CBC(True, shared_lea_key, iv, True)
     ct = leaCBC.update(pt)
     ct += leaCBC.final()
 
-    print("\n\nBob encrypted the email successfully using LEA with CBC mode\n")
-    print("Bob send Alice the encrypted email\n")
-	
-    #decryption
-    print("Alice received the encrypted email and she starts decrypting it\n") 
-    leaCBC = LEA.CBC(False, dec,iv, True)
-    pt = leaCBC.update(ct)
-    pt += leaCBC.final()
+    print("Alice signs with her secret key using schnorr signature of the cipher text")
+    signer = schnorr.SchnorrSigner(key=aliceSecretKey, p=p, g=g, hash_func=schnorr.sha256_hash)
+    signature = signer.sign(str(ct))
 
-    # Save the encrypted MP3 file to disk
-    with open('cha_cha_cha_decrypted.mp3', 'wb') as f:
-        f.write(pt)
+    print("Alice sends signature of the ct to Bob")
+    print("Bob verifies the signature")
+    verified = Bob_verifier.verify(str(ct), signature)
+    if verified:
+        print("The signature is VALID for this message and this public key")
+        print("Bob decrypts the message that Alice sent")
+        leaCBC = LEA.CBC(False, shared_lea_key, iv, True)
+        pt = leaCBC.update(ct)
+        pt += leaCBC.final()
 
-  
-   # decrypt_output = pt.decode()
-    print("Alice decrypted the email successfully\n")
-   # print("The decrypted message is- " + decrypt_output)
+        # Save the encrypted MP3 file to disk
+        with open('cha_cha_cha_decrypted.mp3', 'wb') as f:
+            f.write(pt)
+    else:
+        print("The signature is NOT VALID for this message and this public key")
 
-    print("Decrypt End")
 
 
 if __name__ == "__main__":
     main()
-   
