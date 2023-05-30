@@ -5,6 +5,10 @@ from typing import Callable, Union, Tuple, Sequence
 
 from signature import Signature, Signer, Verifier
 
+def sha256_hash_one_message(message: str) -> int:
+    hasho = sha256()
+    hasho.update(message.encode())
+    return int(hasho.hexdigest(), 16)
 
 def sha256_hash(r: str, message: str) -> int:
     """
