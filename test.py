@@ -11,44 +11,46 @@ def create_verifier(public_key, p, g):
     verifier = schnorr.SchnorrVerifier(keys=public_key, p=p, g=g, hash_func=schnorr.sha256_hash)
     return verifier
 
-def sign_in(username,password,hashed_pass):
-    if(username=="alice"):
+
+def sign_in(username, password, hashed_pass):
+    if (username == "alice"):
         return schnorr.sha256_hash_one_message(password) == hashed_pass[0]
-    elif(username=="bob"):
+    elif (username == "bob"):
         return schnorr.sha256_hash_one_message(password) == hashed_pass[1]
     return False
 
 
 def main():
-
-    username1="alice"
-    password1="123456"
-    hashed_password1=schnorr.sha256_hash_one_message(password1)
-    premission_level1="upload"
-    is_logged1=False
-    username2="bob"
-    password2="123"
-    hashed_password2 =schnorr.sha256_hash_one_message(password2)
-    premission_level2 ="download"
+    username1 = "alice"
+    hashed_password1 = 64042235640975155117310274771932083755136637533499687061408327255432019864722
+    premission_level1 = "upload"
+    is_logged1 = False
+    username2 = "bob"
+    hashed_password2 = 75263518707598184987916378021939673586055614731957507592904438851787542395619
+    premission_level2 = "download"
     is_logged2 = False
-    hashed_pass=[hashed_password1,hashed_password2]
+    hashed_pass = [hashed_password1, hashed_password2]
 
-    username=input("Enter username :").lower()
-    while(not sign_in(username,input("Enter password :").lower(),hashed_pass)):
+    username = input("Enter username :").lower()
+    while (not sign_in(username, input("Enter password :").lower(), hashed_pass)):
         print("invalid user or password\nplease try again\n")
         username = input("Enter username :").lower()
 
-    if username=="bob": is_logged2=True
-    elif username=="alice": is_logged1=True
+    if username == "bob":
+        is_logged2 = True
+    elif username == "alice":
+        is_logged1 = True
 
     print("logged in :)")
 
     username = input("Enter username :").lower()
-    while(not sign_in(username,input("Enter password :").lower(),hashed_pass)):
+    while (not sign_in(username, input("Enter password :").lower(), hashed_pass)):
         print("invalid user or password\nplease try again")
         username = input("Enter username :").lower()
-    if username=="bob": is_logged2=True
-    elif username=="alice": is_logged1=True
+    if username == "bob":
+        is_logged2 = True
+    elif username == "alice":
+        is_logged1 = True
 
     print("logged in :)")
 
@@ -77,17 +79,18 @@ def main():
     print("Alice generating shared keys from the Elliptic Curve Diffie-Hellman key")
     # Calculate shared key - DH
     shared_secret1 = ec.scalar_mult(bobSecretKey, alicePublicKey)
-    shared_secret2 = ec.scalar_mult(aliceSecretKey, bobPublicKey) # No need, it's suppose to be the same like sharedSecert1
+    shared_secret2 = ec.scalar_mult(aliceSecretKey,
+                                    bobPublicKey)  # No need, it's suppose to be the same like sharedSecert1
     if shared_secret1 == shared_secret2:
         print("The shared keys are the same. Continue to encrypt.")
 
-    if(not is_logged1):
+    if (not is_logged1):
         raise Exception("Uploader must be logged in")
     print("Alice encrypts the message with LEA in CBC mode symmetric encryption")
-    mp3_filenames = [r"cha_cha_cha","Leonard-Cohen-Hallelujah"]
+    mp3_filenames = [r"cha_cha_cha", "Leonard-Cohen-Hallelujah"]
     for mp3_filename in mp3_filenames:
         with open(f"{mp3_filename}.mp3", 'rb') as f_mp3:
-           pt = f_mp3.read()
+            pt = f_mp3.read()
         # a random 128 bit initial vector
         iv = base64.b16encode(random.getrandbits(128).to_bytes(16, byteorder='little'))
 
@@ -106,7 +109,7 @@ def main():
         signer = schnorr.SchnorrSigner(key=aliceSecretKey, p=p, g=g, hash_func=schnorr.sha256_hash)
         signature = signer.sign(str(ct))
 
-        if(not is_logged2):
+        if (not is_logged2):
             raise Exception("Downloader must be logged in")
         print("Alice sends signature of the ct to Bob")
         print("Bob verifies the signature")
@@ -123,7 +126,6 @@ def main():
                 f.write(pt)
         else:
             print("The signature is NOT VALID for this message and this public key")
-
 
 
 if __name__ == "__main__":
